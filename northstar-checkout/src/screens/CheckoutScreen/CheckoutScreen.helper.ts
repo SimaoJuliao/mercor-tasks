@@ -6,12 +6,11 @@ import { DEMO_ORDER } from './CheckoutScreen.mock';
 
 const GENERIC_ERROR_MESSAGE = 'Something went wrong while processing the payment.';
 
-
 const useCheckoutScreen = () => {
   const order = DEMO_ORDER;
-  const [isLoading, setIsLoading] = useState(false);
   const [status, setStatus] = useState<CheckoutStatus>({ kind: 'idle' });
 
+  const isLoading = status.kind === 'processing';
   const total = formatMoney(order.amountMinor, order.currency);
 
   const handlePay = useCallback(async () => {
@@ -20,7 +19,6 @@ const useCheckoutScreen = () => {
       return;
     }
 
-    setIsLoading(true);
     setStatus({ kind: 'processing' });
 
     try {
@@ -35,8 +33,6 @@ const useCheckoutScreen = () => {
         kind: 'error',
         message: error instanceof Error ? error.message : GENERIC_ERROR_MESSAGE,
       });
-    } finally {
-      setIsLoading(false);
     }
   }, [order]);
 
