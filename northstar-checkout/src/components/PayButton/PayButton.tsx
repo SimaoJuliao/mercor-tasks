@@ -7,8 +7,6 @@ interface PayButtonProps {
 }
 
 export const PayButton: React.FC<PayButtonProps> = ({ isLoading, total, onPay }) => (
-  // aria-disabled (rather than disabled) keeps the button focusable so screen readers
-  // can still reach it and announce the processing state.
   <button type="button" className="pay-button" onClick={onPay} aria-disabled={isLoading}>
     {isLoading ? (
       <>
