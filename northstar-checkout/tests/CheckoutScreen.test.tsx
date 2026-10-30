@@ -22,6 +22,8 @@ const SUCCESS_RESULT: PaymentResult = {
   processedAt: '2026-01-01T00:00:00.000Z',
 };
 
+const payButton = () => screen.getByRole('button', { name: /pay now/i });
+
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((res) => {
@@ -41,7 +43,7 @@ describe('CheckoutScreen', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Payment checkout' })).toBeInTheDocument();
     expect(screen.getByText(/synthetic payment demonstration/i)).toBeInTheDocument();
     expect(screen.getAllByText('€149.90').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /pay now/i })).toBeEnabled();
+    expect(payButton()).toBeEnabled();
   });
 
   it('shows a processing state and then a success message for a single payment', async () => {
@@ -50,7 +52,7 @@ describe('CheckoutScreen', () => {
     mockedSubmitPayment.mockReturnValueOnce(pending.promise);
 
     render(<CheckoutScreen />);
-    await user.click(screen.getByRole('button', { name: /pay now/i }));
+    await user.click(payButton());
 
     expect(screen.getByRole('button', { name: /processing payment/i })).toHaveAttribute(
       'aria-disabled',
@@ -72,17 +74,21 @@ describe('CheckoutScreen', () => {
 
   it('shows an error message when the payment fails and allows a retry', async () => {
     const user = userEvent.setup();
-    mockedSubmitPayment.mockRejectedValueOnce(new PaymentDeclinedError(DECLINE_MESSAGE));
+    mockedSubmitPayment
+      .mockRejectedValueOnce(new PaymentDeclinedError(DECLINE_MESSAGE))
+      .mockResolvedValueOnce(SUCCESS_RESULT);
 
     render(<CheckoutScreen />);
-    await user.click(screen.getByRole('button', { name: /pay now/i }));
+    await user.click(payButton());
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Payment failed');
     expect(alert).toHaveTextContent(DECLINE_MESSAGE);
-    expect(screen.getByRole('button', { name: /pay now/i })).toHaveAttribute(
-      'aria-disabled',
-      'false',
-    );
+    expect(payButton()).toHaveAttribute('aria-disabled', 'false');
+
+    await user.click(payButton());
+
+    expect(await screen.findByText('Payment successful')).toBeInTheDocument();
+    expect(mockedSubmitPayment).toHaveBeenCalledTimes(2);
   });
 });
