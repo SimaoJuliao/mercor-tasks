@@ -14,11 +14,6 @@ const useCheckoutScreen = () => {
   const total = formatMoney(order.amountMinor, order.currency);
 
   const handlePay = useCallback(async () => {
-    // Ignore clicks while a payment is already in progress.
-    if (isLoading) {
-      return;
-    }
-
     setStatus({ kind: 'processing' });
 
     try {
