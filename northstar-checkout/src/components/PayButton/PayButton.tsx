@@ -7,7 +7,7 @@ interface PayButtonProps {
 }
 
 export const PayButton: React.FC<PayButtonProps> = ({ isLoading, total, onPay }) => (
-  <button type="button" className="pay-button" onClick={onPay} aria-disabled={isLoading}>
+  <button type="button" className="pay-button" onClick={onPay} disabled={isLoading}>
     {isLoading ? (
       <>
         <span className="spinner" aria-hidden="true" />

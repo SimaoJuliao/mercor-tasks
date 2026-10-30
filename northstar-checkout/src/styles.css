@@ -270,7 +270,7 @@ code {
   box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--accent);
 }
 
-.pay-button[aria-disabled='true'] {
+.pay-button:disabled {
   background: var(--brand-strong);
   cursor: progress;
   opacity: 0.85;

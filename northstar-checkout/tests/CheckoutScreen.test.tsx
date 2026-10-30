@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DECLINE_MESSAGE } from '@lib';
@@ -54,10 +54,7 @@ describe('CheckoutScreen', () => {
     render(<CheckoutScreen />);
     await user.click(payButton());
 
-    expect(screen.getByRole('button', { name: /processing payment/i })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
+    expect(screen.getByRole('button', { name: /processing payment/i })).toBeDisabled();
     expect(screen.getByRole('status')).toHaveTextContent(/processing your payment/i);
 
     pending.resolve(SUCCESS_RESULT);
@@ -84,11 +81,50 @@ describe('CheckoutScreen', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Payment failed');
     expect(alert).toHaveTextContent(DECLINE_MESSAGE);
-    expect(payButton()).toHaveAttribute('aria-disabled', 'false');
+    expect(payButton()).toBeEnabled();
 
     await user.click(payButton());
 
     expect(await screen.findByText('Payment successful')).toBeInTheDocument();
     expect(mockedSubmitPayment).toHaveBeenCalledTimes(2);
+  });
+
+  describe('duplicate submissions (regression)', () => {
+    it('ignores repeated clicks while the payment is processing', async () => {
+      const user = userEvent.setup();
+      const pending = deferred<PaymentResult>();
+      mockedSubmitPayment.mockReturnValueOnce(pending.promise);
+
+      render(<CheckoutScreen />);
+      const button = payButton();
+      await user.click(button);
+      await user.click(button);
+      await user.click(button);
+
+      expect(mockedSubmitPayment).toHaveBeenCalledTimes(1);
+
+      pending.resolve(SUCCESS_RESULT);
+      expect(await screen.findByText('Payment successful')).toBeInTheDocument();
+    });
+
+    it('ignores clicks that arrive before React re-renders the disabled button', async () => {
+      const pending = deferred<PaymentResult>();
+      mockedSubmitPayment.mockReturnValueOnce(pending.promise);
+
+      render(<CheckoutScreen />);
+      const button = payButton();
+      // One act() keeps React from re-rendering between the clicks, so the button is not
+      // disabled yet and only the in-flight ref can stop the second and third click.
+      act(() => {
+        button.click();
+        button.click();
+        button.click();
+      });
+
+      expect(mockedSubmitPayment).toHaveBeenCalledTimes(1);
+
+      pending.resolve(SUCCESS_RESULT);
+      expect(await screen.findByText('Payment successful')).toBeInTheDocument();
+    });
   });
 });
