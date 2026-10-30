@@ -7,9 +7,10 @@ verify the fix in Google Chrome.
 The starting code contains a known defect: **rapidly clicking "Pay now" while a payment is pending
 can submit the same payment more than once.**
 
-> **All payments are simulated.** The payment service is a local function that waits for a timer and
-> then resolves or rejects. No network request is made, no payment provider is contacted and no real
-> card, customer or account data exists anywhere in this project.
+> **All payments are simulated.** The app sends `POST /api/payments` to a local mock API that runs
+> inside the Vite dev and preview servers (`mock-api/paymentsApi.ts`). It waits for a timer and then approves or
+> declines. No payment provider is contacted and no real card, customer or account data exists
+> anywhere in this project.
 
 ## Tech stack
 
@@ -41,17 +42,24 @@ Other scripts:
 
 ## Simulating outcomes
 
-The simulated service defaults to a **1800 ms** delay and a **successful** outcome. Override either via
-the URL:
+The simulated payment API defaults to a **1800 ms** delay and a **successful** outcome. Override either
+via the page URL (the app forwards both values to the mock API as query parameters):
 
 - `http://localhost:5173/?outcome=failure` – every call is declined
 - `http://localhost:5173/?delay=3000` – 3 second artificial latency
 - Both can be combined: `?outcome=failure&delay=3000`
 
-## Observing payment service calls
+## Observing payment requests
 
-Every call to the simulated service is numbered:
+Every payment request is visible in four places:
 
+- The DevTools **Network** tab shows one `POST /api/payments` request per call (filter by
+  `api/payments` or Fetch/XHR). Each request is pending for the configured delay; the
+  `X-Request-Id` header (`req_0001`, `req_0002`, …) identifies the call, and the response holds the
+  transaction id (`200`) or the decline message (`402`).
+- The terminal running `npm run dev` logs `[mock-api] payment #N received` and
+  `payment #N captured` / `payment #N declined` for every request the mock API receives. Its counter
+  (and the `NSP-TXN-…` transaction ids) only resets when the dev server restarts.
 - The DevTools **Console** shows `[paymentService] call #N started` and `call #N succeeded` /
   `call #N declined` for each call (synthetic order id and amount only). These are plain
   `console.log` calls in `src/services/paymentService.ts`.
@@ -63,18 +71,16 @@ Every call to the simulated service is numbered:
   __paymentDebug.getConfig()            // current delay/outcome
   ```
 
-The **Network** tab should show only requests to `localhost` (Vite modules); there is no payment
-traffic.
-
 ## Reproducing the bug
 
 1. `npm run dev` and open http://localhost:5173 in Chrome.
-2. Open DevTools (F12) → **Console**.
+2. Open DevTools (F12): **Network** tab (filter `api/payments`) and **Console**.
 3. Optionally run `__paymentDebug.resetInvocationCount()`.
 4. Click **Pay now** several times in quick succession while "Processing payment…" is shown.
-5. Watch the console: one `call #N started` line appears per click, and
-   `__paymentDebug.getInvocationCount()` returns more than `1`. The transaction reference shown on
-   success also reflects the last of several calls (e.g. `NSP-TXN-0004`).
+5. Watch the Network tab: one `POST /api/payments` request appears per click, all pending at the
+   same time. The console shows one `call #N started` line per click and
+   `__paymentDebug.getInvocationCount()` returns more than `1`. Each request creates its own
+   transaction (`NSP-TXN-…`), so the same order is charged several times.
 
 Expected behaviour: exactly one payment request per checkout attempt, however many times the button is
 clicked while a payment is in progress.
@@ -87,7 +93,8 @@ clicked while a payment is in progress.
 | `src/screens/CheckoutScreen/CheckoutScreen.tsx`       | Checkout screen: page layout (`Header`, `CheckoutIntro`, `OrderSummary`, `PaymentPanel`) wired to the hook |
 | `src/components/PaymentPanel/PaymentPanel.tsx`        | Payment panel: card, pay button, result (props only, no service)                                           |
 | `src/components/PayButton/PayButton.tsx`              | The "Pay now" button and its processing state                                                              |
-| `src/services/paymentService.ts`                      | Simulated payment service, call counter, configuration, URL override parsing                               |
+| `src/services/paymentService.ts`                      | Payment API client (`fetch`), call counter, configuration, URL override parsing                            |
+| `mock-api/paymentsApi.ts`                             | Local mock of `POST /api/payments` (delay, approve/decline)                                                |
 | `src/types/payment.ts`                                | Shared types (order, request, result, UI status)                                                           |
 | `tests/CheckoutScreen.test.tsx`                       | Baseline screen tests (service is mocked)                                                                  |
 | `src/main.tsx`                                        | Applies the URL overrides, sets the dev-only `__paymentDebug` helper                                       |
@@ -118,7 +125,9 @@ src/
     PaymentStatusAnnouncer/    screen-reader live region
     index.ts
   hooks/index.ts               shared hooks (none yet)
-  lib/utils.ts, index.ts       formatMoney
+  lib/utils.ts                 formatMoney
+  lib/paymentApi.ts            endpoint, decline message, formatSequence (shared with mock-api)
+  lib/index.ts
   services/paymentService.ts, index.ts
   types/payment.ts, index.ts
   App.tsx                      renders CheckoutScreen
@@ -127,7 +136,8 @@ src/
 tests/
   setup.ts                     jest-dom matchers + RTL cleanup
   CheckoutScreen.test.tsx
-vite.config.ts                 Vite + Vitest configuration, path aliases
+mock-api/paymentsApi.ts        local POST /api/payments mock (Vite dev + preview server)
+vite.config.ts                 Vite + Vitest configuration, path aliases, mock API plugin
 ```
 
 ### Conventions

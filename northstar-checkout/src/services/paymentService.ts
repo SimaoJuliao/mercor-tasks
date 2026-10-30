@@ -1,17 +1,24 @@
 /**
- * Simulated payment service.
+ * Client for the simulated payment API.
  *
- * Everything here runs locally in the browser: there is no HTTP request, no
- * payment gateway and no real card data. A call simply waits for a configurable
- * delay and then resolves or rejects.
+ * `submitPayment` sends `POST /api/payments` to the local mock API served by Vite
+ * (`mock-api/paymentsApi.ts`), so each call shows up in the DevTools Network tab.
+ * There is no payment gateway and no real card data: the mock waits for the
+ * configured delay and then approves or declines the payment.
  *
  * Every call is numbered so duplicate submissions can be spotted:
  *   - each call logs `[paymentService] call #N ...` to the console;
  *   - `getInvocationCount()` returns the number of calls since the last reset
  *     (also available in the browser as `window.__paymentDebug`, dev only).
  */
-import { formatMoney } from '@lib';
-import type { PaymentRequest, PaymentResult, PaymentServiceConfig } from '@/types';
+import { PAYMENTS_ENDPOINT, formatMoney, formatSequence } from '@lib';
+import type {
+  PaymentApiError,
+  PaymentApiSuccess,
+  PaymentRequest,
+  PaymentResult,
+  PaymentServiceConfig,
+} from '@/types';
 
 let config: PaymentServiceConfig = { delayMs: 1800, outcome: 'success' };
 let invocationCount = 0;
@@ -37,7 +44,7 @@ export const parseServiceOverrides = (search: string): Partial<PaymentServiceCon
   };
 };
 
-export const getPaymentServiceConfig =(): PaymentServiceConfig => ({ ...config });
+export const getPaymentServiceConfig = (): PaymentServiceConfig => ({ ...config });
 
 export const getInvocationCount = (): number => invocationCount;
 
@@ -45,14 +52,10 @@ export const resetInvocationCount = (): void => {
   invocationCount = 0;
 };
 
-const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-const formatSequence = (n: number) => String(n).padStart(4, '0');
-
 /**
- * Submits a simulated payment.
- * Resolves after `config.delayMs` with a synthetic transaction, or rejects with
- * a `PaymentDeclinedError` when `config.outcome` is `"failure"`.
+ * Submits a payment to the local mock API, forwarding `config.delayMs` and
+ * `config.outcome` so the mock knows how long to wait and whether to approve.
+ * Rejects with a `PaymentDeclinedError` when the mock declines (`402`).
  */
 export const submitPayment = async (request: PaymentRequest): Promise<PaymentResult> => {
   invocationCount += 1;
@@ -68,25 +71,32 @@ export const submitPayment = async (request: PaymentRequest): Promise<PaymentRes
     outcome,
   });
 
-  await wait(delayMs);
+  const query = new URLSearchParams({ delay: String(delayMs), outcome });
+  const response = await fetch(`${PAYMENTS_ENDPOINT}?${query}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
+    body: JSON.stringify(request),
+  });
 
-  if (outcome === 'failure') {
-    console.log(`[paymentService] call #${callNumber} declined`, { requestId });
-    throw new PaymentDeclinedError('The payment was declined by the simulated processor.');
+  if (!response.ok) {
+    const { message } = (await response.json()) as PaymentApiError;
+    console.log(`[paymentService] call #${callNumber} declined`, {
+      requestId,
+      status: response.status,
+    });
+    throw response.status === 402 ? new PaymentDeclinedError(message) : new Error(message);
   }
 
+  const { transactionId, processedAt } = (await response.json()) as PaymentApiSuccess;
   const result: PaymentResult = {
     requestId,
-    transactionId: `NSP-TXN-${formatSequence(callNumber)}`,
+    transactionId,
     amountMinor: request.amountMinor,
     currency: request.currency,
-    processedAt: new Date().toISOString(),
+    processedAt,
   };
 
-  console.log(`[paymentService] call #${callNumber} succeeded`, {
-    requestId,
-    transactionId: result.transactionId,
-  });
+  console.log(`[paymentService] call #${callNumber} succeeded`, { requestId, transactionId });
 
   return result;
 };

@@ -1,9 +1,10 @@
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 import { defineConfig } from 'vitest/config';
+import { mockPaymentsApi } from './mock-api/paymentsApi';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), mockPaymentsApi()],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

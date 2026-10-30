@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DECLINE_MESSAGE } from '@lib';
 import { CheckoutScreen } from '@screens';
 import { DEMO_ORDER } from '@screens/CheckoutScreen/CheckoutScreen.mock';
 import { PaymentDeclinedError, submitPayment } from '@/services';
@@ -12,8 +13,6 @@ vi.mock('@/services/paymentService', async (importOriginal) => {
 });
 
 const mockedSubmitPayment = vi.mocked(submitPayment);
-
-const DECLINE_MESSAGE = 'The payment was declined by the simulated processor.';
 
 const SUCCESS_RESULT: PaymentResult = {
   requestId: 'req_0001',

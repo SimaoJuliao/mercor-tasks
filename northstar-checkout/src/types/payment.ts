@@ -25,7 +25,7 @@ export interface PaymentRequest {
   currency: CurrencyCode;
 }
 
-/** Response returned by the simulated payment service on success. */
+/** Result of a successful `submitPayment` call. */
 export interface PaymentResult {
   /** Sequential id of the service call that produced this result, e.g. "req_0003". */
   requestId: string;
@@ -33,6 +33,17 @@ export interface PaymentResult {
   amountMinor: number;
   currency: CurrencyCode;
   processedAt: string;
+}
+
+/** Body of a `200` response from `POST /api/payments`. */
+export interface PaymentApiSuccess {
+  transactionId: string;
+  processedAt: string;
+}
+
+/** Body of an error response from `POST /api/payments` (`402` decline or `400`). */
+export interface PaymentApiError {
+  message: string;
 }
 
 export type SimulatedOutcome = 'success' | 'failure';
